@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100&display=swap" rel="stylesheet">
+  <title>"{{ keyword }}" 검색 결과</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+  <style>
+    @font-face {
+    font-family: 'CookieRun-Regular';
+    src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/CookieRun-Regular.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+    body {
+      background-color: #74EBD5;
+      background-image: linear-gradient(90deg, #74EBD5 0%, #9FACE6 100%);
+      background-size: cover;
+      background-attachment: fixed;
+      margin: 0;
+      padding: 0;
+      font-family: 'CookieRun-Regular';
+    }
+
+    /* 상단 네비게이션 바 스타일 */
+    .navbar-custom {
+      background-color: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(5px);
+    }
+    .navbar-brand {
+      font-weight: bold;
+      font-size: 1.2rem;
+      color: #fff !important;
+    }
+
+    /* 테이블 폰트 크기와 간격 축소 */
+    .table {
+      font-size: 0.85rem;  /* 폰트 크기 줄이기 */
+    }
+    .table-hover tbody tr:hover {
+      background-color: #f8f8f8;
+    }
+    .table td, .table th {
+      padding: 0.3rem 0.5rem; /* 셀 패딩 축소 */
+    }
+
+    #sidebar {
+      max-height: 90vh;
+      overflow-y: auto;
+      border-right: 1px solid #ccc;
+      background-color: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(5px);
+    }
+    #tsnePlot {
+      width: 100%;
+      height: 90vh;
+      background-color: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(5px);
+    }
+    .lecture-row {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <!-- 상단 네비게이션 바 -->
+  <nav class="navbar navbar-expand-md navbar-dark navbar-custom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">AcaTuning</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+              aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <!-- 우측 아이콘/메뉴 예시 -->
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="#"><i class="bi bi-person-circle"></i></a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid mt-3">
+    <div class="row">
+      <!-- 사이드바: 상세 정보를 포함한 테이블 -->
+      <div class="col-md-4" id="sidebar">
+        <h5>"{{ keyword }}" 검색 결과</h5>
+        <table class="table table-hover" id="lectureTable">
+          <thead>
+            <tr>
+              <th>학수번호</th>
+              <th>과목명</th>
+              <th>이수구분</th>
+              <th>학점</th>
+              <th>강의시간</th>
+              <th>강의장소</th>
+              <th>교수명</th>
+              <th>임베딩 점수</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for lecture in lectures %}
+            <tr class="lecture-row" data-x="{{ lecture.dim1 }}" data-y="{{ lecture.dim2 }}"
+                data-bs-toggle="tooltip" data-bs-html="true"
+                title="<strong>학수번호:</strong> {{ lecture.course_number }}<br>
+                       <strong>과목명:</strong> {{ lecture.course_name }}<br>
+                       <strong>분반:</strong> {{ lecture.section }}<br>
+                       <strong>이수구분:</strong> {{ lecture.category }}<br>
+                       <strong>학점:</strong> {{ lecture.credits }}<br>
+                       <strong>강의시간:</strong> {{ lecture.lecture_time }}<br>
+                       <strong>강의장소:</strong> {{ lecture.lecture_location }}<br>
+                       <strong>교수명:</strong> {{ lecture.professor_name }}<br>
+                       <strong>임베딩 점수:</strong> {{ lecture.score }}"
+            >
+              <td>{{ lecture.course_number }}</td>
+              <td>{{ lecture.course_name }}</td>
+              <td>{{ lecture.category }}</td>
+              <td>{{ lecture.credits }}</td>
+              <td>{{ lecture.lecture_time }}</td>
+              <td>{{ lecture.lecture_location }}</td>
+              <td>{{ lecture.professor_name }}</td>
+              <td>{{ lecture.score }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <a href="/" class="btn btn-secondary mt-3">다시 검색</a>
+      </div>
+
+      <!-- 메인 영역: t-SNE 산점도 (미니맵) -->
+      <div class="col-md-8">
+        <div id="tsnePlot"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS (Tooltip용) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+  <script>
+    // 페이지 로드 후, 툴팁 초기화
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // 강의 점 데이터 구성 (사이드바 & 그래프용)
+    var lectureData = [
+      {% for lecture in lectures %}
+      {
+        x: {{ lecture.dim1 }},
+        y: {{ lecture.dim2 }},
+        lecture_name: "{{ lecture.course_name }}",
+        score: {{ lecture.score }}
+      },
+      {% endfor %}
+    ];
+
+    // 키워드 좌표 (중심에 위치)
+    var keywordPoint = { x: {{ keyword_x }}, y: {{ keyword_y }} };
+
+    // Plotly 데이터 설정: 강의 점과 키워드 점
+    var lectureTrace = {
+      x: lectureData.map(pt => pt.x),
+      y: lectureData.map(pt => pt.y),
+      mode: 'markers+text',
+      text: lectureData.map(pt => pt.lecture_name),
+      textposition: 'top center',
+      marker: { 
+         size: lectureData.map(() => 8), 
+         color: lectureData.map(() => 'blue') 
+      },
+      type: 'scatter',
+      name: '강의'
+    };
+
+    var keywordTrace = {
+      x: [keywordPoint.x],
+      y: [keywordPoint.y],
+      mode: 'markers+text',
+      text: ['키워드'],
+      textposition: 'bottom center',
+      marker: { size: [12], color: ['green'] },
+      type: 'scatter',
+      name: '키워드'
+    };
+
+    // 그래프 초기 레이아웃
+    var layout = {
+      title: '강의 임베딩 시각화',
+      xaxis: { title: 'Dimension 1' },
+      yaxis: { title: 'Dimension 2' },
+      hovermode: 'closest'
+    };
+
+    // Plotly 초기화
+    var tsneDiv = document.getElementById('tsnePlot');
+    Plotly.newPlot(tsneDiv, [lectureTrace, keywordTrace], layout).then(function(gd) {
+      // gd: 그래프 div
+      // 그래프를 중앙에 맞추기 위해 현재 range 계산
+      var minX = Math.min.apply(null, lectureTrace.x.concat(keywordTrace.x));
+      var maxX = Math.max.apply(null, lectureTrace.x.concat(keywordTrace.x));
+      var minY = Math.min.apply(null, lectureTrace.y.concat(keywordTrace.y));
+      var maxY = Math.max.apply(null, lectureTrace.y.concat(keywordTrace.y));
+
+      // 만약 처음부터 전체 데이터가 보이도록 하고 싶다면, relayout으로 설정
+      Plotly.relayout(gd, {
+        'xaxis.range': [minX - 2, maxX + 2],
+        'yaxis.range': [minY - 2, maxY + 2]
+      });
+    });
+
+    // 마지막으로 사용된 xaxis.range, yaxis.range를 추적 (그래프 중앙 이동용)
+    var currentRangeX = null;
+    var currentRangeY = null;
+
+    // plotly_relayout 이벤트가 발생할 때마다 range 업데이트
+    tsneDiv.on('plotly_relayout', function(eventdata) {
+      var newRangeX = eventdata['xaxis.range'];
+      var newRangeY = eventdata['yaxis.range'];
+      if(newRangeX) currentRangeX = newRangeX;
+      if(newRangeY) currentRangeY = newRangeY;
+    });
+
+    // 사이드바 행 클릭 시 이벤트 처리
+    document.querySelectorAll('.lecture-row').forEach(function(row) {
+      row.addEventListener('click', function() {
+        var x = parseFloat(this.getAttribute('data-x'));
+        var y = parseFloat(this.getAttribute('data-y'));
+
+        // 모든 점을 기본 스타일로 초기화
+        var newSizes = lectureTrace.marker.size.slice();
+        var newColors = lectureTrace.marker.color.slice();
+        for(var i=0; i<newSizes.length; i++){
+          newSizes[i] = 8;
+          newColors[i] = 'blue';
+        }
+
+        // 클릭된 점만 빨간색 & 사이즈 16
+        var idx = lectureData.findIndex(pt => pt.x === x && pt.y === y);
+        if (idx >= 0) {
+          newSizes[idx] = 16;
+          newColors[idx] = 'red';
+        }
+
+        Plotly.restyle('tsnePlot', {
+          'marker.size': [newSizes],
+          'marker.color': [newColors]
+        }, [0]);
+
+        // ✅ 그래프 중앙 이동 (줌 인 없이) => 현재 스케일 유지
+        // 1) 현재 range를 모르면, 기본 range나 초기 range를 사용
+        // 2) 또는 마지막으로 저장된 currentRangeX, currentRangeY 사용
+        //    => range가 없다면, fallback to initial approach
+        var finalRangeX = currentRangeX || layout.xaxis.range || [-10,10];
+        var finalRangeY = currentRangeY || layout.yaxis.range || [-10,10];
+
+        // 범위 길이 계산
+        var spanX = finalRangeX[1] - finalRangeX[0];
+        var spanY = finalRangeY[1] - finalRangeY[0];
+
+        // 새 중심 = (x, y)
+        // 새 range = [ x - spanX/2, x + spanX/2 ]
+        var newRangeX = [ x - spanX/2, x + spanX/2 ];
+        var newRangeY = [ y - spanY/2, y + spanY/2 ];
+
+        Plotly.relayout('tsnePlot', {
+          'xaxis.range': newRangeX,
+          'yaxis.range': newRangeY
+        });
+      });
+    });
+  </script>
+</body>
+</html>
